@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thai Smartcard Reader Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 { color: #333; text-align: center; }
+    .status {
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      text-align: center;
+      font-weight: bold;
+    }
+    .status.waiting { background: #fff3cd; color: #856404; }
+    .status.reading { background: #cce5ff; color: #004085; }
+    .status.success { background: #d4edda; color: #155724; }
+    .status.error { background: #f8d7da; color: #721c24; }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      display: none;
+    }
+    .card.show { display: block; }
+    .card h2 { margin-top: 0; color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+    .field { margin-bottom: 12px; }
+    .field label { font-weight: bold; color: #555; display: block; margin-bottom: 4px; }
+    .field .value {
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #dee2e6;
+      word-break: break-all;
+    }
+    .photo-section { text-align: center; margin-top: 20px; }
+    .photo-section img {
+      max-width: 200px;
+      border: 3px solid #dee2e6;
+      border-radius: 8px;
+    }
+    .json-output {
+      margin-top: 20px;
+      background: #2d2d2d;
+      color: #f8f8f2;
+      padding: 15px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-family: 'Consolas', monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+    .note {
+      background: #e7f3ff;
+      border-left: 4px solid #007bff;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 0 8px 8px 0;
+    }
+    .note a { color: #007bff; }
+    .note.warning {
+      background: #fff3cd;
+      border-left-color: #ffc107;
+    }
+    .reader-select {
+      margin-bottom: 20px;
+      padding: 15px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .reader-select label { font-weight: bold; margin-right: 10px; }
+    .reader-select select {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #dee2e6;
+      font-size: 14px;
+      min-width: 200px;
+    }
+    .reader-select button {
+      padding: 8px 16px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-left: 10px;
+      font-size: 14px;
+    }
+    .reader-select button:hover { background: #0056b3; }
+    .reader-select button:disabled { background: #ccc; cursor: not-allowed; }
+    .reader-info {
+      font-size: 12px;
+      color: #666;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Thai Smartcard Reader Demo</h1>
+
+  <div class="note">
+    <strong>Requirements:</strong>
+    <ol>
+      <li>Install native app: <a href="http://plugin.cardid.org/webcard.pkg" target="_blank">macOS</a> | <a href="http://plugin.cardid.org/webcard.msi" target="_blank">Windows</a></li>
+      <li>Install <a href="https://chromewebstore.google.com/detail/smart-card-extension/icpgdjoejngfekheifhhaceealdnipfb" target="_blank">Smart Card Extension</a> for Chrome</li>
+      <li>Connect a smartcard reader device</li>
+      <li>Insert Thai citizen smartcard</li>
+    </ol>
+  </div>
+
+  <div id="status" class="status waiting">Loading WebCard...</div>
+
+  <div id="readerSection" class="reader-select" style="display:none;">
+    <label>Select Reader:</label>
+    <select id="readerList"></select>
+    <button id="readBtn" onclick="readCard()">Read Card</button>
+    <button onclick="refreshReaders()">Refresh</button>
+    <div id="readerInfo" class="reader-info"></div>
+  </div>
+
+  <div id="cardData" class="card">
+    <h2>Card Information</h2>
+
+    <div class="field">
+      <label>Citizen ID:</label>
+      <div class="value" id="citizenId">-</div>
+    </div>
+
+    <div class="field">
+      <label>Name (TH):</label>
+      <div class="value" id="nameTH">-</div>
+    </div>
+
+    <div class="field">
+      <label>Name (EN):</label>
+      <div class="value" id="nameEN">-</div>
+    </div>
+
+    <div class="field">
+      <label>Birthday:</label>
+      <div class="value" id="birthday">-</div>
+    </div>
+
+    <div class="field">
+      <label>Gender:</label>
+      <div class="value" id="gender">-</div>
+    </div>
+
+    <div class="field">
+      <label>Address:</label>
+      <div class="value" id="address">-</div>
+    </div>
+
+    <div class="field">
+      <label>Issue Date:</label>
+      <div class="value" id="issueDate">-</div>
+    </div>
+
+    <div class="field">
+      <label>Expire Date:</label>
+      <div class="value" id="expireDate">-</div>
+    </div>
+
+    <div class="photo-section">
+      <label>Photo:</label><br>
+      <img id="photo" src="" alt="Photo" style="display:none;">
+    </div>
+
+    <h2>Raw JSON Data</h2>
+    <div id="jsonOutput" class="json-output"></div>
+  </div>
+
+  <!-- WebCard.js from official source -->
+  <script src="https://webcard.cardid.org/webcard.js"></script>
+
+  <script>
+    let readers = [];
+    let currentReader = null;
+
+    function setStatus(message, type) {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = message;
+      statusEl.className = 'status ' + type;
+    }
+
+    function hex2string(hexx) {
+      let tempHexx = hexx;
+      if (tempHexx.length > 4) tempHexx = tempHexx.slice(0, -4);
+      const patt = /^[a-zA-Z0-9&@.$%\-,():`# \/]+$/;
+      const hex = tempHexx.toString();
+      let str = '';
+      let tmp = '';
+      for (let i = 0; i < hex.length; i += 2) {
+        tmp = String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+        if (!tmp.match(patt)) {
+          tmp = String.fromCharCode(parseInt(hex.substr(i, 2), 16) + 3424);
+        }
+        str += tmp;
+      }
+      str = str.replace(/#/g, ' ');
+      return str;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr || dateStr.length !== 8) return dateStr;
+      return dateStr.substring(0, 4) + '/' + dateStr.substring(4, 6) + '/' + dateStr.substring(6, 8);
+    }
+
+    function hexToBase64(hexString) {
+      const bytes = [];
+      for (let i = 0; i < hexString.length; i += 2) {
+        bytes.push(parseInt(hexString.substr(i, 2), 16));
+      }
+      return btoa(String.fromCharCode.apply(null, bytes));
+    }
+
+    function displayData(person) {
+      document.getElementById('citizenId').textContent = person.citizenId || '-';
+      document.getElementById('nameTH').textContent =
+        (person.titleTH || '') + ' ' + (person.firstnameTH || '') + ' ' + (person.lastnameTH || '');
+      document.getElementById('nameEN').textContent =
+        (person.titleEN || '') + ' ' + (person.firstnameEN || '') + ' ' + (person.lastnameEN || '');
+      document.getElementById('birthday').textContent = formatDate(person.birthday) || '-';
+      document.getElementById('gender').textContent = person.gender === '1' ? 'Male' : person.gender === '2' ? 'Female' : '-';
+      document.getElementById('address').textContent = person.address ? person.address.join(' ') : '-';
+      document.getElementById('issueDate').textContent = formatDate(person.issueAll) || '-';
+      document.getElementById('expireDate').textContent = formatDate(person.expire) || '-';
+
+      if (person.image) {
+        const photoEl = document.getElementById('photo');
+        photoEl.src = 'data:image/jpeg;base64,' + hexToBase64(person.image);
+        photoEl.style.display = 'block';
+      }
+
+      document.getElementById('jsonOutput').textContent = JSON.stringify(person, null, 2);
+      document.getElementById('cardData').classList.add('show');
+    }
+
+    async function readCard() {
+      const readerList = document.getElementById('readerList');
+      const selectedIndex = readerList.selectedIndex;
+
+      if (selectedIndex < 0 || !readers[selectedIndex]) {
+        setStatus('Please select a reader', 'error');
+        return;
+      }
+
+      const reader = readers[selectedIndex];
+      document.getElementById('readBtn').disabled = true;
+      setStatus('Connecting to card...', 'reading');
+
+      try {
+        // Connect to reader (exclusive mode) - returns ATR
+        const atr = await reader.connect(true);
+        currentReader = reader;
+        console.log('Connected, ATR:', atr);
+
+        setStatus('Reading card data...', 'reading');
+
+        const person = {};
+        let resp, tmp;
+
+        // Select applet
+        await reader.transceive('00A4040008A000000054480001');
+
+        // Citizen ID
+        resp = await reader.transceive('80B0000402000D');
+        person.citizenId = hex2string(resp);
+
+        // Person Info
+        resp = await reader.transceive('80B000110200D1');
+        tmp = hex2string(resp);
+        tmp = tmp.split(' ').filter(v => v !== '');
+        person.titleTH = tmp[0];
+        person.firstnameTH = tmp[1];
+        person.lastnameTH = tmp[2];
+        person.titleEN = tmp[3];
+        person.firstnameEN = tmp[4];
+        person.lastnameEN = tmp[5];
+        person.birthday = tmp[6] ? tmp[6].slice(0, -1) : '';
+        person.gender = tmp[6] ? tmp[6].slice(-1) : '';
+
+        // Address
+        resp = await reader.transceive('80B01579020064');
+        tmp = hex2string(resp);
+        tmp = tmp.split(' ').filter(v => v !== '');
+        person.address = tmp;
+
+        // Issue & Expire
+        resp = await reader.transceive('80B00167020012');
+        tmp = hex2string(resp);
+        if (tmp.length >= 16) {
+          person.issueAll = tmp.slice(0, 8);
+          person.expire = tmp.slice(8, 16);
+        }
+
+        // Photo
+        setStatus('Reading photo...', 'reading');
+        const imageApdu = [
+          '80B0017B0200FF', '80B0027A0200FF', '80B003790200FF', '80B004780200FF',
+          '80B005770200FF', '80B006760200FF', '80B007750200FF', '80B008740200FF',
+          '80B009730200FF', '80B00A720200FF', '80B00B710200FF', '80B00C700200FF',
+          '80B00D6F0200FF', '80B00E6E0200FF', '80B00F6D0200FF', '80B0106C0200FF',
+          '80B0116B0200FF', '80B0126A0200FF', '80B013690200FF', '80B014680200FF'
+        ];
+        let rawImage = '';
+        for (let i = 0; i < imageApdu.length; i++) {
+          resp = await reader.transceive(imageApdu[i]);
+          if (resp.length > 4) resp = resp.slice(0, -4);
+          rawImage += resp;
+        }
+        person.image = rawImage;
+
+        setStatus('Card read successfully!', 'success');
+        displayData(person);
+
+      } catch (e) {
+        setStatus('Error: ' + e.message, 'error');
+        console.error(e);
+      } finally {
+        try {
+          if (currentReader) {
+            await currentReader.disconnect();
+          }
+        } catch (e) {}
+        document.getElementById('readBtn').disabled = false;
+      }
+    }
+
+    async function refreshReaders() {
+      try {
+        readers = await navigator.webcard.readers();
+        const readerList = document.getElementById('readerList');
+        const readerInfo = document.getElementById('readerInfo');
+        readerList.innerHTML = '';
+
+        if (!readers || readers.length === 0) {
+          readerList.innerHTML = '<option value="">No readers found</option>';
+          readerInfo.textContent = '';
+          setStatus('No smartcard readers found. Please connect a reader.', 'waiting');
+        } else {
+          readers.forEach((reader, index) => {
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = reader.name;
+            readerList.appendChild(option);
+          });
+
+          readerInfo.textContent = readers.length + ' reader(s) found';
+          setStatus('Reader found. Insert card and click "Read Card"', 'success');
+        }
+      } catch (e) {
+        setStatus('Error getting readers: ' + e.message, 'error');
+        console.error(e);
+      }
+    }
+
+    async function init() {
+      console.log('Initializing...');
+
+      // Check if webcard is available
+      if (typeof navigator.webcard === 'undefined') {
+        setStatus('WebCard not loaded. Please refresh the page.', 'error');
+        return;
+      }
+
+      console.log('WebCard found:', navigator.webcard);
+      setStatus('WebCard loaded. Checking readers...', 'waiting');
+
+      // Setup event handlers
+      navigator.webcard.cardInserted = function(reader) {
+        console.log('Card inserted:', reader.name);
+        setStatus('Card inserted in ' + reader.name + '! Click "Read Card"', 'success');
+      };
+
+      navigator.webcard.cardRemoved = function(reader) {
+        console.log('Card removed:', reader.name);
+        setStatus('Card removed from ' + reader.name, 'waiting');
+        document.getElementById('cardData').classList.remove('show');
+      };
+
+      document.getElementById('readerSection').style.display = 'block';
+      await refreshReaders();
+
+      // Poll for reader changes
+      setInterval(refreshReaders, 5000);
+    }
+
+    // Wait for webcard.js to load and initialize
+    window.onload = function() {
+      // Give webcard.js time to set up
+      setTimeout(init, 1000);
+    };
+  </script>
+</body>
+</html>
